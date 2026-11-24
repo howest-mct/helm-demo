@@ -53,3 +53,12 @@ jobs:
       - name: Install charts and run helm test
         if: steps.list-changed.outputs.changed == 'true'
         run: ct install --config ct.yaml
+
+      - name: Show cluster state on failure
+        if: failure() && steps.list-changed.outputs.changed == 'true'
+        run: |
+          kubectl get all,pvc -A
+          kubectl get events -A --sort-by=.lastTimestamp | tail -40
+          for p in $(kubectl get pods -A -l app.kubernetes.io/name=notes-app -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
+            echo "=== $p"; kubectl logs -n "${p%/*}" "${p#*/}" --all-containers --tail=50 || true
+          done

@@ -17,6 +17,8 @@ spec:
     - name: curl
       image: curlimages/curl:8.11.1
       securityContext:
+        # The curl image runs as a named user; runAsNonRoot needs a numeric UID
+        runAsUser: 100
         {{- toYaml .Values.securityContext | nindent 8 }}
       env:
         - name: WEB
