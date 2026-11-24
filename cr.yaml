@@ -1,4 +1,2 @@
-# Set to true for GPG signing
-sign: false
-# UID of the GPG key to use
-key: Chart Releaser Test Key
+# chart-releaser configuration, see https://github.com/helm/chart-releaser
+skip-existing: true

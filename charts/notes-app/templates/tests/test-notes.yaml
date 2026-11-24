@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "notes-app.componentName" (list . "test") }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    # Only created by `helm test`, and removed again when it succeeds
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: curl
+      image: curlimages/curl:8.11.1
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      env:
+        - name: WEB
+          value: "http://{{ include "notes-app.componentName" (list . "web") }}:{{ .Values.web.service.port }}"
+      command:
+        - sh
+        - -ec
+        - |
+          echo "1. The web front-end serves the page"
+          curl -fsS "$WEB/" | grep -q "{{ .Values.web.title }}"
+          echo "2. nginx forwards /api to the API, which reaches the database"
+          curl -fsS "$WEB/api/info" | tee /dev/stderr | grep -q '"database":"connected"'
+          echo "3. A note can be written and read back"
+          id=$(curl -fsS -X POST -H 'Content-Type: application/json' -d '{"text":"helm test"}' "$WEB/api/notes" | sed 's/[^0-9]//g')
+          curl -fsS "$WEB/api/notes" | grep -q '"helm test"'
+          curl -fsS -X DELETE "$WEB/api/notes/$id"
+          echo "All checks passed"

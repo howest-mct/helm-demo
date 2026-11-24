@@ -1,3 +1,7 @@
 # Helm chart automated files
 /charts/*/charts
+*.tgz
 .idea
+.vscode
+.DS_Store
+__pycache__/

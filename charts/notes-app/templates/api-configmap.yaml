@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "notes-app.componentName" (list . "api") }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  # Non-secret settings, injected as environment variables with envFrom
+  APP_MESSAGE: {{ .Values.api.message | quote }}
+  APP_VERSION: {{ default .Chart.AppVersion .Values.api.image.tag | quote }}
+  MAX_NOTES: {{ .Values.api.maxNotes | quote }}
+  DB_HOST: {{ include "notes-app.dbHost" . | quote }}
+  DB_PORT: {{ include "notes-app.dbPort" . | quote }}
+  DB_NAME: {{ include "notes-app.dbName" . | quote }}
+  DB_USER: {{ include "notes-app.dbUser" . | quote }}

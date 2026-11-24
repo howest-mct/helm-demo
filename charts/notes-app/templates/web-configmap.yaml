@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "notes-app.componentName" (list . "web") }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+data:
+  # nginx serves the page and forwards /api/ to the api Service.
+  # The Service name is filled in by Helm, so it matches any release name.
+  default.conf: |
+    server {
+      listen 8080;
+      root /usr/share/nginx/html;
+
+      location /api/ {
+        proxy_pass http://{{ include "notes-app.componentName" (list . "api") }}:{{ .Values.api.service.port }};
+        proxy_set_header Host $host;
+      }
+
+      location /healthz {
+        return 200 "ok\n";
+      }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>{{ .Values.web.title }}</title>
+      <style>
+        body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
+        h1 { color: {{ .Values.web.accentColor }}; margin-bottom: .2rem; }
+        .info { background: #f3f4f6; border-left: 4px solid {{ .Values.web.accentColor }}; padding: .6rem .9rem; border-radius: 6px; font-size: .9rem; }
+        form { display: flex; gap: .5rem; margin: 1.2rem 0; }
+        input { flex: 1; padding: .5rem; border: 1px solid #d1d5db; border-radius: 6px; }
+        button { background: {{ .Values.web.accentColor }}; color: white; border: 0; border-radius: 6px; padding: .5rem .9rem; cursor: pointer; }
+        li { display: flex; justify-content: space-between; gap: .5rem; padding: .45rem 0; border-bottom: 1px solid #e5e7eb; }
+        li small { color: #6b7280; }
+        li button { background: none; color: #9ca3af; padding: 0 .3rem; }
+        ul { list-style: none; padding: 0; }
+      </style>
+    </head>
+    <body>
+      <h1>{{ .Values.web.title }}</h1>
+      <p>Release <code>{{ .Release.Name }}</code> in namespace <code>{{ .Release.Namespace }}</code>, chart {{ include "notes-app.chart" . }}</p>
+      <div class="info" id="info">Loading…</div>
+      <form id="form">
+        <input id="text" placeholder="Write a note…" maxlength="500" required>
+        <button>Add</button>
+      </form>
+      <ul id="notes"></ul>
+      <script>
+        const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+        async function load() {
+          const info = await fetch("api/info").then(r => r.json()).catch(() => null);
+          document.getElementById("info").innerHTML = info
+            ? `Answered by pod <b>${esc(info.pod)}</b> · API v${esc(info.version)} · database ${esc(info.database)}<br>${esc(info.message)}`
+            : "The API is not reachable (yet).";
+          const notes = await fetch("api/notes").then(r => r.ok ? r.json() : []).catch(() => []);
+          document.getElementById("notes").innerHTML = notes.map(n =>
+            `<li><span>${esc(n.text)}<br><small>saved by ${esc(n.author)}</small></span><button onclick="del(${n.id})" title="Delete">✕</button></li>`
+          ).join("");
+        }
+        async function del(id) { await fetch(`api/notes/${id}`, { method: "DELETE" }); load(); }
+        document.getElementById("form").addEventListener("submit", async e => {
+          e.preventDefault();
+          const input = document.getElementById("text");
+          const r = await fetch("api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: input.value }) });
+          if (!r.ok) alert((await r.json()).detail);
+          input.value = ""; load();
+        });
+        load();
+      </script>
+    </body>
+    </html>

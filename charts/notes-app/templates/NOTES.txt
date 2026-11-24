@@ -1,0 +1,31 @@
+{{ .Values.web.title }} is deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Components:
+  web  {{ .Values.web.replicaCount }}x nginx       -> Service {{ include "notes-app.componentName" (list . "web") }} ({{ .Values.web.service.type }})
+  api  {{ if .Values.api.autoscaling.enabled }}{{ .Values.api.autoscaling.minReplicas }}-{{ .Values.api.autoscaling.maxReplicas }}x (HPA){{ else }}{{ .Values.api.replicaCount }}x{{ end }} FastAPI     -> Service {{ include "notes-app.componentName" (list . "api") }}
+{{- if .Values.postgresql.enabled }}
+  db   1x PostgreSQL  -> StatefulSet {{ include "notes-app.componentName" (list . "postgresql") }}{{ if .Values.postgresql.persistence.enabled }} with a {{ .Values.postgresql.persistence.size }} PVC{{ else }} (no persistence!){{ end }}
+{{- else }}
+  db   external       -> {{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}
+{{- end }}
+
+Watch the pods start:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+Open the application:
+{{- if .Values.ingress.enabled }}
+  http://{{ default "localhost" .Values.ingress.host }}/
+{{- else if eq .Values.web.service.type "NodePort" }}
+  kubectl get svc {{ include "notes-app.componentName" (list . "web") }} -n {{ .Release.Namespace }}
+  {{- if .Values.web.service.nodePort }}
+  On k3d with the node ports mapped to your machine: http://localhost:{{ .Values.web.service.nodePort }}/
+  {{- end }}
+{{- else if eq .Values.web.service.type "LoadBalancer" }}
+  kubectl get svc {{ include "notes-app.componentName" (list . "web") }} -n {{ .Release.Namespace }}  (wait for an EXTERNAL-IP)
+{{- else }}
+  kubectl port-forward svc/{{ include "notes-app.componentName" (list . "web") }} 8080:{{ .Values.web.service.port }} -n {{ .Release.Namespace }}
+  Then browse to http://localhost:8080/ and refresh a few times to see different API pods answer.
+{{- end }}
+
+Check that everything works end to end:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
