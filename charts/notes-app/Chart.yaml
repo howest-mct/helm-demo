@@ -1,0 +1,19 @@
+apiVersion: v2
+name: notes-app
+description: >-
+  A three-tier demo application (nginx web front-end, FastAPI backend and
+  PostgreSQL) to show what a realistic Helm chart looks like.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/howest-mct/helm-demo
+sources:
+  - https://github.com/howest-mct/helm-demo/tree/main/apps/notes-api
+keywords:
+  - demo
+  - fastapi
+  - postgresql
+  - howest
+maintainers:
+  - name: nathansegers
+    url: https://github.com/nathansegers

@@ -1,0 +1,19 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notes-app.componentName" (list . "postgresql") }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  # Headless service: gives the StatefulSet pod a stable DNS name
+  clusterIP: None
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+  selector:
+    {{- include "notes-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}

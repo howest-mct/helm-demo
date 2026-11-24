@@ -1,47 +1,64 @@
 name: Lint and Test Charts
 
-on: pull_request
+on:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   lint-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@v4
         with:
-          version: v3.4.1
+          version: v3.16.4
 
-      # Python is required because `ct lint` runs Yamale (https://github.com/23andMe/Yamale) and
-      # yamllint (https://github.com/adrienverge/yamllint) which require Python
+      # ct lint runs yamllint and yamale, which need Python
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.7
+          python-version: "3.12"
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.0.1
-        with:
-          version: v3.3.0
+        uses: helm/chart-testing-action@v2.7.0
 
-      - name: Run chart-testing (list-changed)
+      - name: List changed charts
         id: list-changed
         run: |
           changed=$(ct list-changed --config ct.yaml)
           if [[ -n "$changed" ]]; then
-            echo "::set-output name=changed::true"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run chart-testing (lint)
+      - name: Lint charts
         run: ct lint --config ct.yaml
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1.1.0
         if: steps.list-changed.outputs.changed == 'true'
+        uses: helm/kind-action@v1.12.0
 
-      - name: Run chart-testing (install)
+      # Test the chart against the API code in this pull request, not a published image
+      - name: Build notes-api image and load it into kind
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          tag=$(yq '.appVersion' charts/notes-app/Chart.yaml)
+          docker build -t "ghcr.io/howest-mct/helm-demo-api:$tag" apps/notes-api
+          kind load docker-image "ghcr.io/howest-mct/helm-demo-api:$tag" --name chart-testing
+
+      - name: Install charts and run helm test
+        if: steps.list-changed.outputs.changed == 'true'
         run: ct install --config ct.yaml
+
+      - name: Show cluster state on failure
+        if: failure() && steps.list-changed.outputs.changed == 'true'
+        run: |
+          kubectl get all,pvc -A
+          kubectl get events -A --sort-by=.lastTimestamp | tail -40
+          for p in $(kubectl get pods -A -l app.kubernetes.io/name=notes-app -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'); do
+            echo "=== $p"; kubectl logs -n "${p%/*}" "${p#*/}" --all-containers --tail=50 || true
+          done

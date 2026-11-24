@@ -1,16 +1,61 @@
-name: Release Charts
+name: Release
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  release:
+  # Build the notes-api image for amd64 and arm64 (Apple Silicon, Raspberry Pi)
+  # and tag it with the appVersion of the notes-app chart.
+  image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Read appVersion
+        id: version
+        run: echo "tag=$(yq '.appVersion' charts/notes-app/Chart.yaml)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/notes-api
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/howest-mct/helm-demo-api:${{ steps.version.outputs.tag }}
+            ghcr.io/howest-mct/helm-demo-api:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/howest-mct/helm-demo
+            org.opencontainers.image.description=Notes API used by the notes-app Helm chart
+            org.opencontainers.image.licenses=Apache-2.0
+
+  # Package every chart with a new version, attach it to a GitHub release and
+  # update index.yaml on the gh-pages branch (served by GitHub Pages).
+  charts:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -19,37 +64,15 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
-      - name: Install Helm
-        uses: azure/setup-helm@v1
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
         with:
-          version: v3.4.1
-
-      # Optional step if GPG signing is used
-      - name: Prepare GPG key
-        run: |
-          gpg_dir=.cr-gpg
-          mkdir "$gpg_dir"
-
-          keyring="$gpg_dir/secring.gpg"
-          base64 -d <<< "$GPG_KEYRING_BASE64" > "$keyring"
-
-          passphrase_file="$gpg_dir/passphrase"
-          echo "$GPG_PASSPHRASE" > "$passphrase_file"
-
-          echo "CR_PASSPHRASE_FILE=$passphrase_file" >> "$GITHUB_ENV"
-          echo "CR_KEYRING=$keyring" >> "$GITHUB_ENV"
-        env:
-          GPG_KEYRING_BASE64: "${{ secrets.GPG_KEYRING_BASE64 }}"
-          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
-
-      - name: Add dependency chart repos
-        run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
+          version: v3.16.4
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.1.0
+        uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: charts
           config: cr.yaml
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

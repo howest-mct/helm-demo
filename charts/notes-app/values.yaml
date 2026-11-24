@@ -1,0 +1,139 @@
+# Default values for notes-app.
+# Override any of these with `-f my-values.yaml` or `--set key=value`.
+
+# -- Override the chart name used in resource names
+nameOverride: ""
+# -- Override the full resource name prefix (default: <release>-<chart>)
+fullnameOverride: ""
+
+# -- Secrets to pull images from a private registry, e.g. [{name: ghcr-secret}]
+imagePullSecrets: []
+
+serviceAccount:
+  # -- Create a dedicated ServiceAccount for the pods
+  create: true
+  # -- Name of the ServiceAccount (generated from the fullname when empty)
+  name: ""
+
+# ---------------------------------------------------------------------------
+# Web front-end: nginx serving a static page and proxying /api to the backend
+# ---------------------------------------------------------------------------
+web:
+  replicaCount: 1
+  image:
+    repository: nginxinc/nginx-unprivileged
+    tag: "1.27-alpine"
+    pullPolicy: IfNotPresent
+  # -- Title shown on the web page (rendered into a ConfigMap)
+  title: "Howest Notes"
+  # -- Accent colour of the web page
+  accentColor: "#e4003a"
+  service:
+    # -- ClusterIP, NodePort or LoadBalancer
+    type: ClusterIP
+    port: 80
+    # -- Fixed node port when type is NodePort (30000-32767), empty = random
+    nodePort: null
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
+
+# ---------------------------------------------------------------------------
+# API backend: FastAPI, see apps/notes-api in this repository
+# ---------------------------------------------------------------------------
+api:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/howest-mct/helm-demo-api
+    # -- Image tag, defaults to the chart's appVersion
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- Message returned by /api/info (rendered into a ConfigMap)
+  message: "Deployed with Helm!"
+  # -- Maximum number of notes the API accepts
+  maxNotes: 100
+  # -- Extra environment variables, e.g. [{name: FOO, value: bar}]
+  extraEnv: []
+  service:
+    port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  autoscaling:
+    # -- Create a HorizontalPodAutoscaler (replaces replicaCount)
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# ---------------------------------------------------------------------------
+# PostgreSQL inside the release (StatefulSet). Disable to use an external DB.
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    database: notes
+    username: notes
+    # -- Leave empty to generate a random password (kept across upgrades)
+    password: ""
+    # -- Use an existing Secret instead (must contain the key `password`)
+    existingSecret: ""
+  persistence:
+    # -- Store data in a PersistentVolumeClaim; false = emptyDir (data is lost on restart)
+    enabled: true
+    size: 1Gi
+    # -- StorageClass for the PVC, empty = cluster default (local-path on k3d)
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# -- Used only when postgresql.enabled is false
+externalDatabase:
+  host: ""
+  port: 5432
+  database: notes
+  username: notes
+  password: ""
+  # -- Existing Secret with the key `password`
+  existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Ingress in front of the web front-end (Traefik is the default on k3d/k3s)
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  # -- IngressClass, e.g. traefik or nginx; empty = cluster default
+  className: ""
+  annotations: {}
+  # -- Hostname, e.g. notes.localhost; empty = match every host
+  host: ""
+  # -- TLS config, e.g. [{secretName: notes-tls, hosts: [notes.example.com]}]
+  tls: []
+
+# Security settings applied to the web and api pods
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

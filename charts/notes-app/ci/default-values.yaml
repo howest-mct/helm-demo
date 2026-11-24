@@ -1,0 +1,3 @@
+# Used by chart-testing (ct install) in CI: the defaults, with 1 API replica.
+api:
+  replicaCount: 1
