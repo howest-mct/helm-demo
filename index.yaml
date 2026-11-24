@@ -548,4 +548,27 @@ entries:
     urls:
     - https://github.com/helm/charts-repo-actions-demo/releases/download/example-v2-0.2.2/example-v2-0.2.2.tgz
     version: 0.2.2
-generated: "2019-12-08T02:57:21.985425597Z"
+  notes-app:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2026-11-24T14:18:22.563847847Z"
+    description: A three-tier demo application (nginx web front-end, FastAPI backend
+      and PostgreSQL) to show what a realistic Helm chart looks like.
+    digest: 7f323e74259e872eed52c0bd20d5de23bba3d1d60f192a525f41e4199c6ff1a4
+    home: https://github.com/howest-mct/helm-demo
+    keywords:
+    - demo
+    - fastapi
+    - postgresql
+    - howest
+    maintainers:
+    - name: nathansegers
+      url: https://github.com/nathansegers
+    name: notes-app
+    sources:
+    - https://github.com/howest-mct/helm-demo/tree/main/apps/notes-api
+    type: application
+    urls:
+    - https://github.com/howest-mct/helm-demo/releases/download/notes-app-1.0.0/notes-app-1.0.0.tgz
+    version: 1.0.0
+generated: "2026-11-24T14:18:22.56387948Z"
